@@ -1,0 +1,176 @@
+CREATE OR REPLACE FILE FORMAT ff_json
+  TYPE = JSON ,
+  STRIP_OUTER_ARRAY = TRUE ;
+  
+  select $1
+  from @TASK.DEMO.TASK1
+(file_format=>ff_json);
+
+SELECT 
+    $1:Order_Date::varchar AS Order_Date,
+    $1:Time::time AS Time,
+    $1:Aging AS Aging,
+    $1:Customer_Id AS Customer_Id,
+    $1:Gender::varchar AS Gender,
+    $1:Device_Type::varchar AS Device_Type,
+    $1:Customer_Login_type::varchar AS Customer_Login_type,
+    $1:Product_Category::varchar AS Product_Category,
+    $1:Product::varchar AS Product,
+    $1:Sales AS Sales,
+    $1:Quantity AS Quantity,
+    $1:Discount AS Discount,
+    $1:Profit AS Profit,
+    $1:Shipping_Cost AS Shipping_Cost,
+    $1:Order_Priority::varchar AS Order_Priority,
+    $1:Payment_method::varchar AS Payment_method
+FROM @TASK.DEMO.TASK1
+(file_format=>ff_json);
+
+
+create or replace table company
+(
+    Order_Date varchar,
+    Time time,
+    Aging INT,
+    Customer_Id INT,
+    Gender VARCHAR(10),
+    Device_Type VARCHAR(50),
+    Customer_Login_type VARCHAR(50),
+    Product_Category VARCHAR(100),
+    Product VARCHAR(100),
+    Sales INT,
+    Quantity INT,
+    Discount FLOAT,
+    Profit FLOAT,
+    Shipping_Cost FLOAT,
+    Order_Priority VARCHAR(20),
+    Payment_method VARCHAR(20)
+);
+
+SELECT * FROM TASK.DEMO.COMPANY;
+
+SELECT 
+-- trim($1:Aging,'"')::int AS Aging,
+case when trim($1:Aging,'"')='' then NULL else $1:Aging end::int AS Aging,
+    $1 as dt
+FROM @TASK.DEMO.TASK1
+(file_format=>ff_json) where dt ilike '%""%';
+
+
+CREATE OR REPLACE PROCEDURE insert_data()
+RETURNS STRING
+LANGUAGE SQL
+AS
+$$
+BEGIN
+    
+    INSERT INTO COMPANY 
+    SELECT 
+    $1:Order_Date::varchar AS Order_Date,
+    $1:Time::time AS Time,
+    case when trim($1:Aging,'"')='' then NULL else $1:Aging end::int AS Aging,
+    $1:Customer_Id AS Customer_Id,
+    $1:Gender::varchar AS Gender,
+    $1:Device_Type::varchar AS Device_Type,
+    $1:Customer_Login_type::varchar AS Customer_Login_type,
+    $1:Product_Category::varchar AS Product_Category,
+    $1:Product::varchar AS Product,
+    case when trim($1:Sales,'"')='' then NULL else $1:Sales end::int AS Sales,
+    case when trim($1:Quantity,'"')='' then NULL else $1:Quantity end::int AS Quantity,
+    case when trim($1:Discount,'"')='' then NULL else $1:Discount end::float AS Discount,
+    $1:Profit AS Profit,
+    case when trim($1:Shipping_Cost,'"')='' then NULL else $1:Shipping_Cost end::float AS Shipping_Cost,
+    case when trim($1:Order_Priority,'"')='' then NULL else $1:Order_Priority end::varchar AS Order_Priority,
+    $1:Payment_method::varchar AS Payment_method
+FROM @TASK.DEMO.TASK1
+(file_format=>ff_json);
+
+    RETURN 'Data inserted successfully!';
+END;
+$$;
+
+CALL insert_data();
+
+SELECT * FROM TASK.DEMO.COMPANY;
+
+SELECT 
+    Customer_ID,
+    Order_Date,
+    SUM(Sales) OVER (
+        PARTITION BY Customer_ID 
+    ) AS Total_Sales
+FROM 
+    company
+ORDER BY 
+    Order_Date;
+
+    
+SELECT product_category,product,sum(profit) as profit_sum, dense_rank() OVER (partition BY product_category order by sum(profit) desc) AS sales_rank FROM company group by product_category,product;
+
+
+SELECT 
+    Customer_ID,
+    PRODUCT_CATEGORY,
+    SUM(Sales) AS Total_Sales
+FROM 
+    company
+group BY 
+    customer_id,product_category;
+
+
+SELECT * from company
+WHERE Discount > 0.20 order by discount;
+
+
+select product_category,sum(profit) as sum_profit from company group by product_category;
+
+
+select PAYMENT_METHOD,sum(profit) as sum_profit,sum(Sales) as sum_Sales from company group by payment_method;
+
+
+-- select (profit-avg(profit)) as avg_profit from company group by product_category;
+
+
+WITH Avg_Profit_CTE AS (
+    SELECT 
+        Product_Category,
+        AVG(Profit) AS Avg_Profit
+    FROM 
+        Orders_Table
+    GROUP BY 
+        Product_Category
+)
+SELECT 
+    o.Order_ID,
+    o.Product_Category,
+    o.Profit,
+    a.Avg_Profit,
+    o.Profit - a.Avg_Profit AS Profit_Difference
+FROM 
+    Orders_Table o
+JOIN 
+    Avg_Profit_CTE a
+ON 
+    o.Product_Category = a.Product_Category
+ORDER BY 
+    o.Product_Category, o.Order_ID;
+
+    
+
+select customer_id,coalesce(sum(Sales),0) as total_sales from company group by customer_id order by total_sales desc limit 5 ;
+
+
+SELECT 
+    customer_id,
+    Order_Date,
+    SUM(Profit) OVER (
+        ORDER BY Order_Date
+    ) AS Cumulative_Profit
+FROM 
+    company
+ORDER BY 
+    Order_Date;
+
+select sum(profit) from company;
+
+select * from company where order_priority='Medium' and profit > 40;
