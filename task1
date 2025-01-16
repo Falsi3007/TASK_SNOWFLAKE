@@ -82,7 +82,7 @@ BEGIN
     case when trim($1:Shipping_Cost,'"')='' then NULL else $1:Shipping_Cost end::float AS Shipping_Cost,
     case when trim($1:Order_Priority,'"')='' then NULL else $1:Order_Priority end::varchar AS Order_Priority,
     $1:Payment_method::varchar AS Payment_method
-FROM @TASK.DEMO.TASK1
+FROM @TASK.DEMO.TASK1/YEAR(current_date())-MONTH(current_date())-DAY(current_date())/order*.csv
 (file_format=>ff_json);
 
     RETURN 'Data inserted successfully!';
@@ -91,83 +91,82 @@ $$;
 
 CALL insert_data();
 
+select YEAR(current_date()),MONTH(current_date()),DAY(current_date());
+
+ls  @TASK.DEMO.TASK1;
+
 SELECT * FROM TASK.DEMO.COMPANY;
 
 SELECT 
     Customer_ID,
     Order_Date,
     SUM(Sales) OVER (
-        PARTITION BY Customer_ID 
-    ) AS Total_Sales
+        PARTITION BY Customer_ID
+        ORDER BY Order_Date
+    ) AS Running_Total_Sales
 FROM 
-    company
-ORDER BY 
-    Order_Date;
+    company 
+ORDER BY Order_Date;
 
-    
+select * from task.demo.company where customer_id=39783;
+
 SELECT product_category,product,sum(profit) as profit_sum, dense_rank() OVER (partition BY product_category order by sum(profit) desc) AS sales_rank FROM company group by product_category,product;
 
 
 SELECT 
     Customer_ID,
     PRODUCT_CATEGORY,
-    SUM(Sales) AS Total_Sales
+    SUM(Sales) OVER (
+        PARTITION BY Customer_ID
+    ) AS Total_Sales
 FROM 
-    company
-group BY 
-    customer_id,product_category;
+    company;
+
 
 
 SELECT * from company
 WHERE Discount > 0.20 order by discount;
 
 
-select product_category,sum(profit) as sum_profit from company group by product_category;
+SELECT 
+customer_id,
+    Product_Category,
+    SUM(Profit) OVER (PARTITION BY Product_Category) AS Total_Profit,
+    SUM(Profit) OVER (PARTITION BY customer_id ) AS Running_Total_Profit
+FROM 
+    company 
+ORDER BY 
+    Product_Category;
+
 
 
 select PAYMENT_METHOD,sum(profit) as sum_profit,sum(Sales) as sum_Sales from company group by payment_method;
 
 
 -- select (profit-avg(profit)) as avg_profit from company group by product_category;
-
-
-WITH Avg_Profit_CTE AS (
-    SELECT 
-        Product_Category,
-        AVG(Profit) AS Avg_Profit
-    FROM 
-        Orders_Table
-    GROUP BY 
-        Product_Category
-)
 SELECT 
-    o.Order_ID,
-    o.Product_Category,
-    o.Profit,
-    a.Avg_Profit,
-    o.Profit - a.Avg_Profit AS Profit_Difference
+    customer_id,
+    Product_Category,
+    AVG(Profit) OVER (PARTITION BY Product_Category) AS Avg_Profit_By_Category,
+    Profit - AVG(Profit) OVER (PARTITION BY Product_Category) AS Profit_Comparison
 FROM 
-    Orders_Table o
-JOIN 
-    Avg_Profit_CTE a
-ON 
-    o.Product_Category = a.Product_Category
+    company
 ORDER BY 
-    o.Product_Category, o.Order_ID;
+    Product_Category;
 
-    
+
 
 select customer_id,coalesce(sum(Sales),0) as total_sales from company group by customer_id order by total_sales desc limit 5 ;
 
 
 SELECT 
-    customer_id,
     Order_Date,
     SUM(Profit) OVER (
         ORDER BY Order_Date
     ) AS Cumulative_Profit
 FROM 
     company
+-- group by all;
 ORDER BY 
     Order_Date;
 
