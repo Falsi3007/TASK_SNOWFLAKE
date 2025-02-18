@@ -1,0 +1,29 @@
+create or replace file format task.public.csv_reader2
+type='csv'
+field_optionally_enclosed_by='"'
+skip_header=1;
+
+with cte as(
+select
+coalesce(lag(chart_id) ignore nulls over ( order by rowno),chart_id) as chart_id,coalesce(patient_name,lag(patient_name) ignore nulls over ( order by rowno)) as patient_name,
+coalesce(start_date,lag(start_date) ignore nulls over ( order by rowno)) as start_date,
+coalesce(end_date,lag(end_date) ignore nulls over ( order by rowno)) as end_date,task_id,task_name,times,monday,
+tuesday,wednesday,thursday,friday
+from (
+select row_number() over (order by 1) as rowno,
+case when $1 regexp '[0-9]{4}' then $1 end as task_id,
+case when $1 regexp '[0-9]{4}' then $2 end as task_name,
+case when $1='Chart ID :' then $3 end as chart_id,
+case when $1='Client Name :' then $3 end as patient_name,
+case when $1='Start Date :' then $3 end as start_date,
+case when $19='End Date :' then $24 end as end_date,
+case when $6 regexp '[0-9]' then $6 end as times,
+$12 as monday,
+$16 as tuesday,
+$19 as wednesday,
+$23 as thursday,
+$27 as friday
+from @task_stage/Practical_data.csv
+(file_format=> 'task.public.csv_reader2')))
+select *  from cte join (select 'WPT-Willswillae' as location)
+where times is not null;
