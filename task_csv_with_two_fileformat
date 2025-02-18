@@ -1,0 +1,36 @@
+create or replace file format ff_csv
+type = CSV
+field_delimiter = ','
+record_delimiter = 'Chart ID :'
+FIELD_OPTIONALLY_ENCLOSED_BY = '"'
+TRIM_SPACE = TRUE;
+ 
+create or replace file format ff_csv1
+type = CSV
+field_delimiter = ','
+FIELD_OPTIONALLY_ENCLOSED_BY = '"'
+TRIM_SPACE = TRUE;
+ 
+-- with practical_data_chart as (
+-- select $3 as chart_id,$39 as client_name,$75 as start_date,$96 as end_date from @SQL_NEW_TASK.PUBLIC.PRACTICAL_DATA_STAGE
+-- (file_format =>  SQL_NEW_TASK.PUBLIC.PRACTICAL_DATA_FORMAT ))
+-- select * from practical_data_chart where chart_id is not null;
+ 
+with cte as (select $1 as task_id,$2 as task_name,$3 as ch, ROW_NUMBER() OVER(ORDER BY (SELECT 1)) AS rownum,
+$6 as times,$9 as sun,$12 as mon,$16 as tue,$19 as wed,$23 as thu,$27 as fri,$30 as sat,
+from @task.public.demo/Practical (file_format => ff_csv1))
+select * from cte;
+ 
+with cte as (select $1 as task_id,$2 as task_name,$3 as ch, ROW_NUMBER() OVER(ORDER BY (SELECT 1)) AS rownum,
+$6 as times,$9 as sun,$12 as mon,$16 as tue,$19 as wed,$23 as thu,$27 as fri,$30 as sat,
+from @task.public.demo/Practical (file_format => ff_csv1) where  $1 regexp '[0-9]{4}' or $3 regexp 'PAT.*'
+),
+-- select * from cte;
+cte1 as (
+select task_id,task_name,times,sun,mon,tue,wed,thu,fri,sat,
+coalesce(ch,lag(ch) ignore nulls over(partition by (select 1) order by rownum )) as chart_id, from cte
+),
+cte2 as (
+select $3 as chart_id,$39 as client_name,$75 as start_date,$96 as end_date from @task.public.demo/Practical
+(file_format => ff_csv ))
+select c1.chart_id,client_name,start_date,end_date,task_id,task_name,times,sun,mon,tue,wed,thu,fri,sat,'WPT- Willswillae' as location from cte1 as c1 join cte2 as c2 on c1.chart_id = c2.chart_id where c1.chart_id is not null and task_id != 'Chart ID :';
